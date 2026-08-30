@@ -22,7 +22,7 @@ BASE="https://github.com/${REPO}/releases/latest/download"
 TOKEN=""
 SERVER=""
 PREFIX="${HOME}/.routeiq"
-BIN="${HOME}/routeiq-agent"
+BIN=""   # resolved from PREFIX once options are parsed
 JOBS="2"
 NO_SERVICE=""
 
@@ -55,6 +55,11 @@ done
 # console approves it. Nothing secret is typed on this machine, nothing lands in
 # shell history, and nothing sits in a config file waiting to be read.
 [ -n "$SERVER" ] || { echo "error: --server is required" >&2; exit 1; }
+
+# The binary lives with everything else the agent owns, and a symlink puts it on
+# PATH so it can be run by name rather than by path.
+BIN="${PREFIX}/bin/routeiq-agent"
+mkdir -p "${PREFIX}/bin"
 
 # ── Platform ────────────────────────────────────────────────────────────────
 
@@ -106,6 +111,23 @@ echo "  checksum verified"
 
 install -m 0755 "${TMP}/${ASSET}" "$BIN"
 
+# Put it on PATH. /usr/local/bin is on every default PATH; ~/.local/bin often is
+# not, which is exactly how a tool ends up installed and still "not found".
+LINKED=""
+for dir in /usr/local/bin "${HOME}/.local/bin"; do
+    if [ -w "$dir" ] 2>/dev/null; then
+        ln -sf "$BIN" "${dir}/routeiq-agent" && LINKED="${dir}/routeiq-agent" && break
+    elif [ "$dir" = "/usr/local/bin" ] && command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
+        sudo ln -sf "$BIN" "${dir}/routeiq-agent" && LINKED="${dir}/routeiq-agent" && break
+    fi
+done
+if [ -z "$LINKED" ]; then
+    mkdir -p "${HOME}/.local/bin"
+    ln -sf "$BIN" "${HOME}/.local/bin/routeiq-agent"
+    LINKED="${HOME}/.local/bin/routeiq-agent"
+fi
+echo "  linked ${LINKED}"
+
 # ── Configure ───────────────────────────────────────────────────────────────
 
 mkdir -p "${PREFIX}/workspaces"
@@ -125,7 +147,7 @@ echo "  wrote ${PREFIX}/agent.json"
 if [ -n "$NO_SERVICE" ]; then
     echo
     echo "Installed. Start it with:"
-    echo "  ${BIN} -config ${PREFIX}/agent.json"
+    echo "  routeiq-agent"
     exit 0
 fi
 
@@ -165,14 +187,20 @@ UNIT
     echo
     if [ -z "$TOKEN" ]; then
         echo "Sign this machine in:"
-        echo "  ${BIN} setup -config ${PREFIX}/agent.json"
+        echo "  routeiq-agent setup"
         echo
         echo "It will show a code to approve in the console."
     else
         echo "Running. It provisions its toolchain on first start — about 10 seconds."
     fi
+    echo
+    echo "  routeiq-agent doctor           what this machine can do"
     echo "  systemctl --user status routeiq-agent"
     echo "  tail -f ${PREFIX}/agent.log"
+    case ":${PATH}:" in
+        *":$(dirname "$LINKED"):"*) ;;
+        *) echo; echo "  note: $(dirname "$LINKED") is not on your PATH — add it, or run ${BIN}" ;;
+    esac
     exit 0
 fi
 
