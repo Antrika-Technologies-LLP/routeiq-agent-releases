@@ -30,8 +30,8 @@ usage() {
     cat <<USAGE
 RouteIQ agent installer
 
-  --token   <token>   enrollment token from the console (required)
   --server  <url>     control plane URL (required)
+  --token   <token>   enrollment token; omit it to sign in with a code instead
   --prefix  <dir>     where state and tools live (default: ~/.routeiq)
   --jobs    <n>       max concurrent jobs (default: 2)
   --no-service        install and configure, but do not start a service
@@ -50,7 +50,10 @@ while [ $# -gt 0 ]; do
     esac
 done
 
-[ -n "$TOKEN" ]  || { echo "error: --token is required (register a runner in the console)" >&2; exit 1; }
+# --token is optional. Without one the agent signs in the way a device with no
+# browser should: it prints a short code, and somebody already signed in to the
+# console approves it. Nothing secret is typed on this machine, nothing lands in
+# shell history, and nothing sits in a config file waiting to be read.
 [ -n "$SERVER" ] || { echo "error: --server is required" >&2; exit 1; }
 
 # ── Platform ────────────────────────────────────────────────────────────────
@@ -160,7 +163,14 @@ UNIT
     fi
 
     echo
-    echo "Running. It provisions its toolchain on first start — about 10 seconds."
+    if [ -z "$TOKEN" ]; then
+        echo "Sign this machine in:"
+        echo "  ${BIN} setup -config ${PREFIX}/agent.json"
+        echo
+        echo "It will show a code to approve in the console."
+    else
+        echo "Running. It provisions its toolchain on first start — about 10 seconds."
+    fi
     echo "  systemctl --user status routeiq-agent"
     echo "  tail -f ${PREFIX}/agent.log"
     exit 0
