@@ -111,6 +111,13 @@ echo "  checksum verified"
 
 install -m 0755 "${TMP}/${ASSET}" "$BIN"
 
+# Earlier versions installed straight into $HOME. Leaving that copy behind means
+# two binaries and no way to tell which one ran.
+if [ -f "${HOME}/routeiq-agent" ] && [ "${HOME}/routeiq-agent" != "$BIN" ]; then
+    rm -f "${HOME}/routeiq-agent"
+    echo "  removed the old ${HOME}/routeiq-agent"
+fi
+
 # Put it on PATH. /usr/local/bin is on every default PATH; ~/.local/bin often is
 # not, which is exactly how a tool ends up installed and still "not found".
 LINKED=""
@@ -176,7 +183,11 @@ WantedBy=default.target
 UNIT
 
     systemctl --user daemon-reload
-    systemctl --user enable --now routeiq-agent
+    systemctl --user enable routeiq-agent
+    # restart, not `enable --now`: --now does nothing to an already-running
+    # service, so an upgrade would report success while the old binary kept
+    # running - the kind of thing that costs an afternoon to notice.
+    systemctl --user restart routeiq-agent
 
     # Without lingering the service dies at logout, which looks like a crash days later.
     if command -v loginctl >/dev/null 2>&1; then
