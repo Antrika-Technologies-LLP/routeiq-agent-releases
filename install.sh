@@ -135,6 +135,16 @@ if [ -z "$LINKED" ]; then
 fi
 echo "  linked ${LINKED}"
 
+# Say what actually landed.
+#
+# The checksum proves the download was not tampered with. It does not prove it is
+# current: GitHub can serve the "latest" assets from an edge cache for a few
+# minutes after a release, and the binary and its SHA256SUMS go stale together —
+# so an upgrade verifies perfectly and installs the version you already had. That
+# is invisible unless the installer says which one it is.
+INSTALLED="$("$BIN" --version 2>/dev/null || "$BIN" version 2>/dev/null || echo 'unknown version')"
+echo "  ${INSTALLED}"
+
 # ── Configure ───────────────────────────────────────────────────────────────
 
 mkdir -p "${PREFIX}/workspaces"
