@@ -17,7 +17,9 @@
 set -eu
 
 REPO="Antrika-Technologies-LLP/routeiq-agent-releases"
-BASE="https://github.com/${REPO}/releases/latest/download"
+RELEASES="https://github.com/${REPO}/releases"
+BASE=""   # pinned to the current tag once it is resolved, just before downloading
+TAG=""
 
 TOKEN=""
 SERVER=""
@@ -84,6 +86,28 @@ echo "Installing the RouteIQ agent for ${OS}/${ARCH}"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
+# Resolve which release is current, and pin every download to its tag.
+#
+# `/releases/latest/download/` is edge-cached, and for a few minutes after a
+# release it serves the PREVIOUS asset alongside the PREVIOUS SHA256SUMS. They
+# agree with each other, so the verification below passes and you install the
+# build you already had. GitHub answers `/releases/latest` with a redirect to the
+# tag, so the tag is in the redirect target — and a tagged URL is not subject to
+# that window.
+TAG="$(curl -fsSLI -o /dev/null -w '%{url_effective}' "${RELEASES}/latest" 2>/dev/null | sed 's#.*/##')"
+case "$TAG" in
+    v[0-9]*)
+        BASE="${RELEASES}/download/${TAG}"
+        echo "  release ${TAG}"
+        ;;
+    *)
+        # Better a possibly-stale install that says so than no install at all.
+        echo "  warning: could not resolve the current release; using 'latest'" >&2
+        TAG=""
+        BASE="${RELEASES}/latest/download"
+        ;;
+esac
+
 echo "  downloading ${ASSET}"
 curl -fsSL "${BASE}/${ASSET}" -o "${TMP}/${ASSET}"
 curl -fsSL "${BASE}/SHA256SUMS" -o "${TMP}/SHA256SUMS"
@@ -144,6 +168,20 @@ echo "  linked ${LINKED}"
 # is invisible unless the installer says which one it is.
 INSTALLED="$("$BIN" --version 2>/dev/null || "$BIN" version 2>/dev/null || echo 'unknown version')"
 echo "  ${INSTALLED}"
+
+# And check it against the release we resolved, rather than leaving the reader to
+# notice. Padded with spaces so the version has to be a whole word: the agent
+# answers "routeiq-agent 1.18.1 (linux/amd64)".
+if [ -n "$TAG" ]; then
+    case " ${INSTALLED} " in
+        *" ${TAG#v} "*) ;;
+        *)
+            echo "error: installed ${INSTALLED}, but ${TAG} was the release asked for" >&2
+            echo "       (this is the stale-cache case; try again in a few minutes)" >&2
+            exit 1
+            ;;
+    esac
+fi
 
 # ── Configure ───────────────────────────────────────────────────────────────
 
