@@ -185,6 +185,7 @@ fi
 
 # ── Configure ───────────────────────────────────────────────────────────────
 
+if [ ! -f "${PREFIX}/agent.json" ]; then
 mkdir -p "${PREFIX}/workspaces"
 cat > "${PREFIX}/agent.json" <<JSON
 {
@@ -198,6 +199,9 @@ cat > "${PREFIX}/agent.json" <<JSON
 JSON
 chmod 600 "${PREFIX}/agent.json"
 echo "  wrote ${PREFIX}/agent.json"
+else
+    echo "  kept existing settings in ${PREFIX}/agent.json"
+fi
 
 if [ -n "$NO_SERVICE" ]; then
     echo
@@ -205,6 +209,27 @@ if [ -n "$NO_SERVICE" ]; then
     echo "  routeiq-agent"
     exit 0
 fi
+
+# The daemon requests the connection code; no interactive CLI setup is needed.
+portal_instructions() {
+    echo
+    echo "Manage setup in the portal: ${SERVER%/}/agent-routing/dev-runners"
+    if [ ! -f "${PREFIX}/state.json" ]; then
+        echo "Waiting for the runner's connection code..."
+        ATTEMPTS=0
+        while [ "$ATTEMPTS" -lt 30 ] && [ ! -s "${PREFIX}/connection.txt" ]; do
+            sleep 1
+            ATTEMPTS=$((ATTEMPTS + 1))
+        done
+        if [ -s "${PREFIX}/connection.txt" ]; then
+            cat "${PREFIX}/connection.txt"
+        else
+            echo "The connection code will appear in ${PREFIX}/agent.log when the portal is reachable."
+        fi
+    fi
+    echo "After approval, open the runner's Setup tab for storage, keys and job limits."
+    echo "Use Coding CLIs to install tools and sign in, and Git to connect GitHub."
+}
 
 # ── Service ─────────────────────────────────────────────────────────────────
 
@@ -244,18 +269,7 @@ UNIT
     fi
 
     echo
-    if [ -z "$TOKEN" ]; then
-        echo "Sign this machine in:"
-        echo "  routeiq-agent setup"
-        echo
-        echo "It will show a code to approve in the console."
-    else
-        echo "Running. It provisions its toolchain on first start — about 10 seconds."
-    fi
-    echo
-    echo "  routeiq-agent doctor           what this machine can do"
-    echo "  systemctl --user status routeiq-agent"
-    echo "  tail -f ${PREFIX}/agent.log"
+    portal_instructions
     case ":${PATH}:" in
         *":$(dirname "$LINKED"):"*) ;;
         *) echo; echo "  note: $(dirname "$LINKED") is not on your PATH — add it, or run ${BIN}" ;;
@@ -284,8 +298,7 @@ PLIST
     launchctl unload "$PLIST" 2>/dev/null || true
     launchctl load "$PLIST"
     echo
-    echo "Running. It provisions its toolchain on first start — about 10 seconds."
-    echo "  tail -f ${PREFIX}/agent.log"
+    portal_instructions
     exit 0
 fi
 

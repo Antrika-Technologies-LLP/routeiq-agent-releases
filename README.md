@@ -1,6 +1,6 @@
 # RouteIQ agent — releases
 
-Signed-by-checksum binaries and the installer for the **RouteIQ agent**: a long-lived
+Binaries with SHA-256 checksums and the installer for the **RouteIQ agent**: a long-lived
 runner that executes development work on a machine you own.
 
 This repository holds **only the released binaries and the install script**. It is public
@@ -8,24 +8,34 @@ so that installing needs no credentials.
 
 ## Install
 
-Register a runner in the RouteIQ console to get an enrollment token, then:
+Install and start the runner once on your machine:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/Antrika-Technologies-LLP/routeiq-agent-releases/main/install.sh \
-  | sh -s -- --token <ENROLLMENT_TOKEN> --server https://app.example.com
+  | sh -s -- --server https://app.example.com
 ```
 
-Piping to a shell is a choice, not a requirement — the script is short and worth reading:
+The installer starts the background service and displays a connection code. Approve it
+in **RouteIQ → Runners → Connect runner**. Then open that runner in the portal:
 
-```sh
-curl -fsSLO https://raw.githubusercontent.com/Antrika-Technologies-LLP/routeiq-agent-releases/main/install.sh
-less install.sh
-sh install.sh --token <ENROLLMENT_TOKEN> --server https://app.example.com
-```
+- **Setup:** workspace folder, storage budget, disk reserve, automatic tool installation,
+  job limit, and encrypted provider API keys or a GitHub personal access token.
+- **Coding CLIs:** install/update Codex, Claude and Cursor, sign in through your browser,
+  and sign out.
+- **Git:** connect GitHub through browser approval, or disconnect an existing account.
+- **Logs:** see setup and update outcomes.
+
+You do not need to run `routeiq-agent setup`. Credentials entered in Setup are encrypted
+in your browser for the runner's public key; only that machine decrypts and stores them.
+Setup waits for current jobs to finish. Storage settings restart the runner automatically.
+Release retained task copies in the portal before changing the workspace folder.
+The Setup page requires the matching RouteIQ portal/backend release and agent **1.22.0+**.
+
+Existing installations keep their configuration when the installer is run again.
 
 | Option | Default | |
 |---|---|---|
-| `--token` | — | enrollment token, shown once when you register a runner |
+| `--token` | — | optional enrollment token for automated fleet installation |
 | `--server` | — | your control plane URL |
 | `--prefix` | `~/.routeiq` | where state, tools and logs live |
 | `--jobs` | `2` | maximum concurrent jobs |
@@ -53,13 +63,14 @@ is left alone.
 ## What it does on your machine
 
 - Dials **out** only. No inbound port is opened and no listener is started.
-- Clones into a temporary workspace that is deleted when the job ends, successful or not.
-- Runs the coding CLI you selected for the project, with credentials that are supplied per
-  job and removed afterwards.
+- Keeps a separate workspace per task until you release it in the portal.
+- Runs the coding CLI selected for the project using credentials held on the runner.
+- Isolates each concurrent job’s MCP configuration and temporary materials.
 - Reports prose, identifiers and counts. Output is redacted here, before it is sent —
   private key blocks, key-shaped strings, and any secret the job carried.
 
-**Your source code does not leave the machine.**
+The RouteIQ control plane receives reports, logs and metadata. Coding providers process
+project context according to the CLI and provider you choose.
 
 ## Platforms
 
